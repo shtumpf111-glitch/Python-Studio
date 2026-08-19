@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Python Mobile Studio</title>
+
+  <!-- Pyodide (Python WebAssembly) -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script>
+
+  <!-- CodeMirror CSS & Themes -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/darcula.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/idea.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/one-dark.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+
+  <!-- CodeMirror JS Core -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+
+  <!-- Addons -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+
+  <style>
+    body.theme-darcula {
+      --bg-dark: #2b2b2b;
+      --bg-panel: #3c3f41;
+      --bg-element: #4e5254;
+      --accent: #3592c4;
+      --accent-green: #629755;
+      --accent-red: #f52a65;
+      --text: #a9b7c6;
+      --subtext: #808080;
+      --border: #323232;
+      --console-bg: #1e1e1e;
+    }
+
+    body.theme-idea-light {
+      --bg-dark: #f7f7f7;
+      --bg-panel: #e1e1e1;
+      --bg-element: #d0d0d0;
+      --accent: #0066cc;
+      --accent-green: #008000;
+      --accent-red: #d93025;
+      --text: #000000;
+      --subtext: #555555;
+      --border: #c4c4c4;
+      --console-bg: #ffffff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text);
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    #loader {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: #1e1e1e;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+
+    #loader.hidden { opacity: 0; visibility: hidden; }
+
+    .loader-logo { font-size: 56px; margin-bottom: 20px; animation: pulse 2s infinite ease-in-out; }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(53, 146, 196, 0.4)); }
+      50% { transform: scale(1.1); filter: drop-shadow(0 0 25px rgba(53, 146, 196, 0.8)); }
+    }
+
+    .loader-title { font-size: 20px; font-weight: bold; color: #3592c4; margin-bottom: 8px; }
+    .loader-status { font-size: 13px; color: #808080; margin-bottom: 20px; }
+    .progress-bar { width: 220px; height: 6px; background: #323232; border-radius: 10px; overflow: hidden; }
+    .progress-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #3592c4, #629755); border-radius: 10px; transition: width 0.3s ease; }
+
+    .header {
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand { font-weight: bold; color: var(--accent); font-size: 14px; display: flex; align-items: center; gap: 6px; }
+
+    .menu-bar {
+      background: var(--bg-panel);
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      padding: 2px 8px;
+      gap: 4px;
+      user-select: none;
+    }
+
+    .menu-item { position: relative; }
+
+    .menu-btn {
+      background: transparent;
+      border: none;
+      color: var(--text);
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .menu-btn:hover, .menu-btn:focus { background: var(--bg-element); }
+
+    .dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      min-width: 240px;
+      max-height: 380px;
+      overflow-y: auto;
+      z-index: 100;
+      padding: 4px 0;
+    }
+
+    .dropdown.show { display: block; }
+
+    .dropdown-item {
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .dropdown-item:hover { background: var(--accent); color: #ffffff; }
+    .dropdown-divider { height: 1px; background: var(--border); margin: 4px 0; }
+
+    .del-tpl-btn {
+      color: var(--accent-red);
+      font-weight: bold;
+      padding: 0 4px;
+      border-radius: 4px;
+    }
+    .del-tpl-btn:hover { background: rgba(255,255,255,0.2); }
+
+    .tabs-bar {
+      background: var(--bg-panel);
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tabs-bar::-webkit-scrollbar { display: none; }
+
+    .tab {
+      padding: 6px 12px;
+      font-size: 12px;
+      background: var(--bg-panel);
+      color: var(--subtext);
+      border-right: 1px solid var(--border);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .tab.active { background: var(--bg-dark); color: var(--accent); border-bottom: 2px solid var(--accent); }
+    .tab .close-btn { padding: 2px 4px; font-size: 10px; border-radius: 50%; }
+    .tab .close-btn:hover { background: var(--accent-red); color: #fff; }
+
+    .view-switcher { display: flex; background: var(--bg-panel); border-bottom: 1px solid var(--border); }
+    .view-btn {
+      flex: 1; padding: 8px; text-align: center; font-size: 12px; font-weight: bold;
+      color: var(--subtext); background: transparent; border: none; border-bottom: 2px solid transparent;
+    }
+    .view-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    .workspace { display: flex; flex: 1; overflow: hidden; position: relative; }
+
+    .editor-section, .output-section {
+      flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%;
+      position: absolute; top: 0; left: 0; background: var(--bg-dark); visibility: hidden;
+    }
+
+    .editor-section.visible, .output-section.visible { visibility: visible; z-index: 10; }
+
+    @media (min-width: 768px) {
+      .view-switcher { display: none; }
+      .workspace { position: static; }
+      .editor-section, .output-section {
+        position: static; visibility: visible !important; border-right: 1px solid var(--border);
+      }
+      .output-section { border-right: none; }
+    }
+
+    .quick-keys {
+      display: flex; background: var(--bg-panel); border-top: 1px solid var(--border);
+      overflow-x: auto; padding: 4px; gap: 4px; scrollbar-width: none;
+    }
+    .quick-keys::-webkit-scrollbar { display: none; }
+
+    .key-btn {
+      padding: 6px 10px; font-family: monospace; font-size: 13px;
+      background: var(--bg-element); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text); min-width: 32px;
+    }
+
+    .CodeMirror {
+      flex: 1; height: 100%; font-family: 'JetBrains Mono', 'Fira Code', monospace;
+      font-size: 13px; line-height: 1.4;
+    }
+
+    .line-error { background-color: rgba(243, 139, 168, 0.25) !important; }
+    .error-gutter-mark { color: var(--accent-red); font-weight: bold; padding-left: 2px; }
+
+    .CodeMirror-hints {
+      background: var(--bg-panel) !important; border: 1px solid var(--border) !important;
+      border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999 !important;
+    }
+    .CodeMirror-hint { color: var(--text) !important; font-family: monospace; font-size: 12px; padding: 4px 8px !important; }
+    li.CodeMirror-hint-active { background-color: var(--accent) !important; color: #ffffff !important; }
+
+    .console-container {
+      flex: 1; background: var(--console-bg); padding: 12px; overflow-y: auto; font-family: monospace; font-size: 12px;
+    }
+
+    .console-log { color: var(--text); white-space: pre-wrap; word-break: break-all; margin-bottom: 4px; }
+    .console-error { color: var(--accent-red); white-space: pre-wrap; word-break: break-all; margin-bottom: 4px; }
+    .console-info { color: var(--accent); }
+
+    .pkg-bar { padding: 6px 10px; background: var(--bg-panel); border-top: 1px solid var(--border); display: flex; gap: 6px; }
+
+    input[type="text"], input[type="number"], select {
+      background: var(--bg-dark); border: 1px solid var(--border); color: var(--text); padding: 6px 8px; border-radius: 4px; outline: none; font-size: 12px;
+    }
+
+    button.btn-primary { background: var(--accent); color: #ffffff; border: none; font-weight: bold; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+
+    .statusbar {
+      background: var(--bg-panel); border-top: 1px solid var(--border); padding: 4px 10px; font-size: 11px; color: var(--subtext); display: flex; justify-content: space-between;
+    }
+
+    .modal {
+      display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); z-index: 1000; justify-content: center; align-items: center;
+    }
+    .modal.show { display: flex; }
+
+    .modal-content {
+      background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px; width: 90%; max-width: 380px; padding: 16px; color: var(--text);
+    }
+
+    .modal-header { font-weight: bold; margin-bottom: 16px; display: flex; justify-content: space-between; font-size: 15px; }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; font-size: 13px; }
+  </style>
+</head>
+<body class="theme-darcula">
+
+  <div id="loader">
+    <div class="loader-logo">🐍</div>
+    <div class="loader-title">Python Studio</div>
+    <div class="loader-status" id="loaderStatus">Загрузка Pyodide ядра...</div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+  </div>
+
+  <div class="header">
+    <div class="brand">🐍 Python Studio</div>
+    <button id="runBtn" class="btn-primary" onclick="runPython()" disabled>▶ Запуск</button>
+  </div>
+
+  <div class="menu-bar">
+    <div class="menu-item">
+      <button class="menu-btn" onclick="toggleMenu('fileMenu')">File</button>
+      <div class="dropdown" id="fileMenu">
+        <div class="dropdown-item" onclick="createNewFile()">Новый файл <span>+</span></div>
+        <div class="dropdown-item" onclick="document.getElementById('fileInput').click()">Открыть... <span>📂</span></div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" onclick="downloadCode()">Сохранить <span>💾</span></div>
+      </div>
+    </div>
+
+    <div class="menu-item">
+      <button class="menu-btn" onclick="toggleMenu('editMenu')">Edit</button>
+      <div class="dropdown" id="editMenu">
+        <div class="dropdown-item" onclick="editor.undo()">Отменить <span>Ctrl+Z</span></div>
+        <div class="dropdown-item" onclick="editor.redo()">Повторить <span>Ctrl+Y</span></div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" onclick="openSettings()">⚙ Настройки редактора</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" onclick="clearEditor()">Очистить всё</div>
+      </div>
+    </div>
+
+    <div class="menu-item">
+      <button class="menu-btn" onclick="toggleMenu('viewMenu')">View</button>
+      <div class="dropdown" id="viewMenu">
+        <div class="dropdown-item" onclick="switchMobileView('editor')">Показать редактор</div>
+        <div class="dropdown-item" onclick="switchMobileView('console')">Показать консоль</div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item" onclick="clearConsole()">Очистить консоль</div>
+      </div>
+    </div>
+
+    <div class="menu-item">
+      <button class="menu-btn" onclick="toggleMenu('toolsMenu')">Tools</button>
+      <div class="dropdown" id="toolsMenu">
+        <div class="dropdown-item" onclick="saveCurrentAsTemplate()" style="color:var(--accent); font-weight:bold;">
+          ➕ Сохранить код как шаблон
+        </div>
+        <div class="dropdown-divider"></div>
+        <div id="templatesList"></div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".py,.txt" style="display:none" onchange="loadCodeFromFile(event)">
+
+  <div class="tabs-bar" id="tabsBar">
+    <div style="padding: 6px; cursor: pointer; color: var(--subtext);" onclick="createNewFile()">+</div>
+  </div>
+
+  <div class="view-switcher">
+    <button class="view-btn active" id="tabEditorBtn" onclick="switchMobileView('editor')">Код</button>
+    <button class="view-btn" id="tabConsoleBtn" onclick="switchMobileView('console')">Консоль</button>
+  </div>
+
+  <div class="workspace">
+    <div class="editor-section visible" id="editorSection">
+      <textarea id="code"></textarea>
+      <div class="quick-keys">
+        <button class="key-btn" onclick="insertSymbol('\t')">Tab</button>
+        <button class="key-btn" onclick="insertSymbol(':')">:</button>
+        <button class="key-btn" onclick="insertSymbol('(')">(</button>
+        <button class="key-btn" onclick="insertSymbol(')')">)</button>
+        <button class="key-btn" onclick="insertSymbol('[')">[</button>
+        <button class="key-btn" onclick="insertSymbol(']')">]</button>
+        <button class="key-btn" onclick="insertSymbol('=')">=</button>
+        <button class="key-btn" onclick="insertSymbol('\"')">"</button>
+        <button class="key-btn" onclick="insertSymbol('\'')">'</button>
+        <button class="key-btn" onclick="insertSymbol('#')">#</button>
+      </div>
+    </div>
+
+    <div class="output-section" id="outputSection">
+      <div class="console-container" id="console"></div>
+      <div class="pkg-bar">
+        <input type="text" id="pkgInput" placeholder="Пакет PyPI (например: numpy)" style="flex:1;">
+        <button id="pkgBtn" onclick="installPackage()" style="background:var(--bg-element); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:4px;" disabled>Установить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar">
+    <span id="pyStatus">Загрузка...</span>
+    <span id="lintStatus">Синтаксис: OK</span>
+  </div>
+
+  <div class="modal" id="settingsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <span>⚙ Настройки Редактора</span>
+        <span style="cursor:pointer;" onclick="closeSettings()">✕</span>
+      </div>
+      
+      <div class="setting-row">
+        <label>Тема интерфейса:</label>
+        <select id="settingUITheme" onchange="applySettings()">
+          <option value="darcula">IDEA Darcula (Тёмная)</option>
+          <option value="idea-light">IDEA Light (Светлая)</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <label>Подсветка синтаксиса:</label>
+        <select id="settingCodeTheme" onchange="applySettings()">
+          <option value="darcula">IntelliJ Darcula</option>
+          <option value="idea">IntelliJ Light</option>
+          <option value="one-dark">One Dark</option>
+          <option value="monokai">Monokai</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <label>Размер текста (px):</label>
+        <input type="number" id="settingFontSize" value="13" min="10" max="24" onchange="applySettings()">
+      </div>
+
+      <div class="setting-row">
+        <label>Автодополнение кода:</label>
+        <input type="checkbox" id="settingAutocomplete" checked onchange="applySettings()">
+      </div>
+
+      <div class="setting-row">
+        <label>Перенос длинных строк:</label>
+        <input type="checkbox" id="settingLineWrap" checked onchange="applySettings()">
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let pyodide;
+    let syntaxCheckTimer = null;
+    let activeErrorLine = null;
+    let autocompleteEnabled = true;
+
+    const consoleEl = document.getElementById("console");
+    const pyStatus = document.getElementById("pyStatus");
+    const lintStatus = document.getElementById("lintStatus");
+
+    // Исправленные встроенные шаблоны
+    const defaultTemplates = {
+      "basic": {
+        title: "🐍 Базовый (Ввод/Вывод)",
+        code: `# Базовый ввод и вывод\nname = input("Введите ваше имя: ")\nprint(f"Привет, {name}!")\n`
+      },
+      "loops": {
+        title: " Циклы и Списки",
+        code: `# Работа со списками и циклом for\nnumbers = [10, 20, 30, 40, 50]\nsquares = [x**2 for x in numbers]\n\nfor orig, sq in zip(numbers, squares):\n    print(f"Квадрат {orig} = {sq}")\n`
+      },
+      "http": {
+        title: " HTTP Запрос (pyfetch)",
+        code: `# Асинхронный HTTP-запрос через pyfetch (для WebAssembly)\nfrom pyodide.http import pyfetch\nimport json\n\nasync def function_get_data():\n    url = "https://jsonplaceholder.typicode.com/todos/1"\n    response = await pyfetch(url)\n    data = await response.json()\n    print("Получен ответ от сервера:")\n    print(json.dumps(data, indent=2))\n\n# Вызов асинхронной функции\nawait function_get_data()\n`
+      },
+      "oop": {
+        title: " ООП (Dataclass)",
+        code: `# Классы и Dataclass\nfrom dataclasses import dataclass\n\n@dataclass\nclass Player:\n    name: str\n    score: int = 0\n\n    def add_score(self, points: int):\n        self.score += points\n\np = Player("Alex")\np.add_score(150)\nprint(f"Игрок: {p.name}, Очки: {p.score}")\n`
+      },
+      "json_parse": {
+        title: " Работа с JSON",
+        code: `# Сериализация и парсинг JSON\nimport json\n\nuser_data = {\n    "id": 101,\n    "roles": ["admin", "dev"],\n    "active": True\n}\n\njson_str = json.dumps(user_data)\nparsed = json.loads(json_str)\nprint(f"Роли пользователя: {parsed['roles']}")\n`
+      }
+    };
+
+    let customTemplates = JSON.parse(localStorage.getItem("pro_ide_custom_templates")) || {};
+
+    const pythonKeywords = [
+      "and", "as", "assert", "async", "await", "break", "class", "continue",
+      "def", "del", "elif", "else", "except", "False", "finally", "for",
+      "from", "global", "if", "import", "in", "is", "lambda", "None",
+      "nonlocal", "not", "or", "pass", "raise", "return", "True", "try",
+      "while", "with", "yield", "print", "len", "range", "input", "int",
+      "str", "list", "dict", "set", "tuple", "open", "append", "type"
+    ];
+
+    let files = JSON.parse(localStorage.getItem("pro_ide_files")) || {
+      "main.py": `# Добро пожаловать!\ndef greet(name):\n    return f"Привет, {name}!"\n\nprint(greet("Разработчик"))\n`
+    };
+    let activeFile = localStorage.getItem("pro_ide_active_file") || "main.py";
+
+    const editor = CodeMirror.fromTextArea(document.getElementById("code"), {
+      mode: "python",
+      theme: "darcula",
+      lineNumbers: true,
+      gutters: ["CodeMirror-linenumbers"],
+      autoCloseBrackets: "()[]{}''\"\"",
+      matchBrackets: true,
+      indentUnit: 4,
+      tabSize: 4,
+      lineWrapping: true
+    });
+
+    CodeMirror.registerHelper("hint", "python", function(mirror) {
+      if (!autocompleteEnabled) return null;
+      const cur = mirror.getCursor();
+      const token = mirror.getTokenAt(cur);
+      const start = token.start;
+      const end = cur.ch;
+      const word = token.string.slice(0, end - start);
+
+      if (token.type === "string" || token.type === "comment") return null;
+
+      const list = pythonKeywords.filter(item => item.toLowerCase().startsWith(word.toLowerCase()));
+      if (!list.length) return null;
+
+      return {
+        list: list,
+        from: CodeMirror.Pos(cur.line, start),
+        to: CodeMirror.Pos(cur.line, end)
+      };
+    });
+
+    editor.on("keyup", function(cm, event) {
+      if (!autocompleteEnabled) return;
+      const excludedKeys = [13, 27, 37, 38, 39, 40, 9, 16, 17, 18, 91];
+      if (excludedKeys.includes(event.keyCode)) return;
+
+      const cur = cm.getCursor();
+      const token = cm.getTokenAt(cur);
+
+      if (token.string.trim().length > 0 && (token.type === "variable" || token.type === "keyword" || token.type === null)) {
+        cm.showHint({ completeSingle: false });
+      }
+    });
+
+    editor.on("change", () => {
+      saveToLocalStorage();
+      clearTimeout(syntaxCheckTimer);
+      syntaxCheckTimer = setTimeout(checkSyntax, 400);
+    });
+
+    function renderTemplatesMenu() {
+      const container = document.getElementById("templatesList");
+      container.innerHTML = "";
+
+      Object.keys(defaultTemplates).forEach(key => {
+        const tpl = defaultTemplates[key];
+        const item = document.createElement("div");
+        item.className = "dropdown-item";
+        item.innerText = tpl.title;
+        item.onclick = () => loadTemplateCode(tpl.code);
+        container.appendChild(item);
+      });
+
+      const customKeys = Object.keys(customTemplates);
+      if (customKeys.length > 0) {
+        const divider = document.createElement("div");
+        divider.className = "dropdown-divider";
+        container.appendChild(divider);
+
+        customKeys.forEach(id => {
+          const tpl = customTemplates[id];
+          const item = document.createElement("div");
+          item.className = "dropdown-item";
+          item.innerHTML = `
+            <span>⭐ ${tpl.title}</span>
+            <span class="del-tpl-btn" onclick="deleteCustomTemplate(event, '${id}')">✕</span>
+          `;
+          item.onclick = (e) => {
+            if (e.target.classList.contains('del-tpl-btn')) return;
+            loadTemplateCode(tpl.code);
+          };
+          container.appendChild(item);
+        });
+      }
+    }
+
+    function loadTemplateCode(code) {
+      if (editor.getValue().trim().length > 0) {
+        if (!confirm("Заменить текущий код шаблоном?")) return;
+      }
+      editor.setValue(code);
+    }
+
+    function saveCurrentAsTemplate() {
+      const code = editor.getValue();
+      if (!code.trim()) {
+        alert("Редактор пуст! Нечего сохранять.");
+        return;
+      }
+
+      const name = prompt("Введите название для шаблона:");
+      if (!name) return;
+
+      const id = "custom_" + Date.now();
+      customTemplates[id] = {
+        title: name,
+        code: code
+      };
+
+      localStorage.setItem("pro_ide_custom_templates", JSON.stringify(customTemplates));
+      renderTemplatesMenu();
+      alert(`Шаблон "${name}" успешно сохранен!`);
+    }
+
+    function deleteCustomTemplate(e, id) {
+      e.stopPropagation();
+      if (confirm("Удалить этот кастомный шаблон?")) {
+        delete customTemplates[id];
+        localStorage.setItem("pro_ide_custom_templates", JSON.stringify(customTemplates));
+        renderTemplatesMenu();
+      }
+    }
+
+    function openSettings() { document.getElementById("settingsModal").classList.add("show"); }
+    function closeSettings() { document.getElementById("settingsModal").classList.remove("show"); }
+
+    function applySettings() {
+      const uiTheme = document.getElementById("settingUITheme").value;
+      const codeTheme = document.getElementById("settingCodeTheme").value;
+      const fontSize = document.getElementById("settingFontSize").value;
+      const lineWrap = document.getElementById("settingLineWrap").checked;
+      autocompleteEnabled = document.getElementById("settingAutocomplete").checked;
+
+      document.body.className = `theme-${uiTheme}`;
+      editor.setOption("theme", codeTheme);
+      editor.setOption("lineWrapping", lineWrap);
+      
+      const cmEl = document.querySelector(".CodeMirror");
+      cmEl.style.fontSize = fontSize + "px";
+      editor.refresh();
+    }
+
+    function checkSyntax() {
+      if (!pyodide) return;
+      const code = editor.getValue();
+      
+      if (activeErrorLine !== null) {
+        editor.removeLineClass(activeErrorLine, "background", "line-error");
+        editor.setGutterMarker(activeErrorLine, "CodeMirror-linenumbers", null);
+        activeErrorLine = null;
+      }
+
+      try {
+        pyodide.runPython(`
+import ast
+try:
+    ast.parse(${JSON.stringify(code)})
+    _syntax_error = None
+except SyntaxError as e:
+    _syntax_error = {"line": e.lineno, "msg": e.msg}
+`);
+        const err = pyodide.globals.get("_syntax_error");
+        if (err) {
+          const errData = err.toJs();
+          const lineNum = errData.line - 1;
+          activeErrorLine = lineNum;
+
+          editor.addLineClass(lineNum, "background", "line-error");
+          
+          const marker = document.createElement("div");
+          marker.className = "error-gutter-mark";
+          marker.innerText = "●";
+          editor.setGutterMarker(lineNum, "CodeMirror-linenumbers", marker);
+
+          lintStatus.innerText = `Ошибка (стр. ${errData.line}): ${errData.msg}`;
+          lintStatus.style.color = "var(--accent-red)";
+        } else {
+          lintStatus.innerText = "Синтаксис: OK";
+          lintStatus.style.color = "var(--accent-green)";
+        }
+      } catch (e) {}
+    }
+
+    function toggleMenu(menuId) {
+      document.querySelectorAll(".dropdown").forEach(d => {
+        if (d.id !== menuId) d.classList.remove("show");
+      });
+      document.getElementById(menuId).classList.toggle("show");
+    }
+
+    window.onclick = function(e) {
+      if (!e.target.matches('.menu-btn')) {
+        document.querySelectorAll(".dropdown").forEach(d => d.classList.remove("show"));
+      }
+    }
+
+    function insertSymbol(sym) {
+      editor.replaceSelection(sym);
+      editor.focus();
+    }
+
+    function clearEditor() {
+      if (confirm("Очистить содержимое редактора?")) editor.setValue("");
+    }
+
+    function switchMobileView(view) {
+      document.getElementById("tabEditorBtn").classList.toggle("active", view === 'editor');
+      document.getElementById("tabConsoleBtn").classList.toggle("active", view === 'console');
+      document.getElementById("editorSection").classList.toggle("visible", view === 'editor');
+      document.getElementById("outputSection").classList.toggle("visible", view === 'console');
+      if (view === 'editor') editor.refresh();
+    }
+
+    function renderTabs() {
+      const tabsBar = document.getElementById("tabsBar");
+      tabsBar.querySelectorAll(".tab").forEach(t => t.remove());
+
+      Object.keys(files).forEach(fileName => {
+        const tab = document.createElement("div");
+        tab.className = `tab ${fileName === activeFile ? 'active' : ''}`;
+        tab.innerHTML = `
+          <span>${fileName}</span>
+          ${Object.keys(files).length > 1 ? `<span class="close-btn" onclick="deleteFile(event, '${fileName}')">×</span>` : ''}
+        `;
+        tab.onclick = (e) => {
+          if (e.target.classList.contains("close-btn")) return;
+          switchTab(fileName);
+        };
+        tabsBar.insertBefore(tab, tabsBar.firstChild);
+      });
+    }
+
+    function switchTab(fileName) {
+      files[activeFile] = editor.getValue();
+      activeFile = fileName;
+      editor.setValue(files[activeFile]);
+      saveToLocalStorage();
+      renderTabs();
+      checkSyntax();
+    }
+
+    function createNewFile() {
+      const name = prompt("Имя файла:", `script${Object.keys(files).length + 1}.py`);
+      if (!name) return;
+      const validName = name.endsWith(".py") ? name : name + ".py";
+      files[validName] = "# Новый файл\n";
+      switchTab(validName);
+    }
+
+    function deleteFile(e, fileName) {
+      e.stopPropagation();
+      if (Object.keys(files).length <= 1) return;
+      delete files[fileName];
+      if (activeFile === fileName) activeFile = Object.keys(files)[0];
+      editor.setValue(files[activeFile]);
+      saveToLocalStorage();
+      renderTabs();
+      checkSyntax();
+    }
+
+    function saveToLocalStorage() {
+      files[activeFile] = editor.getValue();
+      localStorage.setItem("pro_ide_files", JSON.stringify(files));
+      localStorage.setItem("pro_ide_active_file", activeFile);
+    }
+
+    function logToConsole(text, type = 'log') {
+      const div = document.createElement("div");
+      div.className = type === 'error' ? 'console-error' : (type === 'info' ? 'console-log console-info' : 'console-log');
+      div.innerText = text;
+      consoleEl.appendChild(div);
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+
+    function clearConsole() { consoleEl.innerHTML = ""; }
+
+    async function initPyodide() {
+      const runBtn = document.getElementById("runBtn");
+      const pkgBtn = document.getElementById("pkgBtn");
+      const loaderStatus = document.getElementById("loaderStatus");
+      const progressFill = document.getElementById("progressFill");
+
+      try {
+        progressFill.style.width = "30%";
+        loaderStatus.innerText = "Инициализация WebAssembly...";
+
+        pyodide = await loadPyodide();
+
+        progressFill.style.width = "70%";
+        loaderStatus.innerText = "Загрузка менеджера пакетов...";
+
+        await pyodide.loadPackage("micropip");
+
+        pyodide.setStdin({
+          stdin: () => prompt("Ввод данных (input):") || ""
+        });
+
+        progressFill.style.width = "100%";
+        loaderStatus.innerText = "Готово!";
+
+        setTimeout(() => {
+          document.getElementById("loader").classList.add("hidden");
+        }, 500);
+
+        clearConsole();
+        logToConsole("Python окружение готово!", "info");
+        pyStatus.innerText = "Python 3.11 (Ready)";
+        
+        runBtn.innerText = "▶ Запуск";
+        runBtn.disabled = false;
+        pkgBtn.disabled = false;
+
+        renderTemplatesMenu();
+        renderTabs();
+        editor.setValue(files[activeFile]);
+        checkSyntax();
+      } catch (err) {
+        loaderStatus.innerText = "Ошибка загрузки!";
+        logToConsole("Ошибка загрузки Python: " + err, "error");
+        pyStatus.innerText = "Ошибка";
+      }
+    }
+
+    // Поддержка асинхронного выполнения (включая await на верхнем уровне)
+    async function runPython() {
+      if (!pyodide) return;
+
+      if (window.innerWidth < 768) switchMobileView('console');
+
+      const code = editor.getValue();
+      clearConsole();
+      logToConsole(`Запуск ${activeFile}...\n---`, "info");
+      const startTime = performance.now();
+
+      try {
+        pyodide.setStdout({
+          batched: (text) => logToConsole(text, 'log')
+        });
+
+        pyodide.setStderr({
+          batched: (text) => logToConsole(text, 'error')
+        });
+
+        // Оборачивание кода в асинхронную функцию для корректной работы await
+        const wrappedCode = `import asyncio\nasync def __user_main__():\n${code.split('\n').map(l => '    ' + l).join('\n')}\nasyncio.ensure_future(__user_main__())`;
+
+        try {
+          await pyodide.runPythonAsync(wrappedCode);
+        } catch (e) {
+          // Если возникла синтаксическая ошибка из-за отступов или инструкций, выполняем обычным методом
+          await pyodide.runPythonAsync(code);
+        }
+
+        const endTime = performance.now();
+        const duration = ((endTime - startTime) / 1000).toFixed(2);
+        logToConsole(`\n--- Завершено за ${duration}с ---`, "info");
+      } catch (err) {
+        logToConsole(err.toString(), "error");
+      }
+    }
+
+    async function installPackage() {
+      const input = document.getElementById("pkgInput");
+      const pkgName = input.value.trim();
+      const pkgBtn = document.getElementById("pkgBtn");
+
+      if (!pkgName) return;
+
+      pkgBtn.disabled = true;
+      logToConsole(`Установка '${pkgName}'...`, "info");
+
+      try {
+        const micropip = pyodide.pyimport("micropip");
+        await micropip.install(pkgName);
+        logToConsole(`Пакет '${pkgName}' установлен!`, "info");
+        input.value = "";
+      } catch (err) {
+        logToConsole(`Ошибка установки: ${err}`, "error");
+      } finally {
+        pkgBtn.disabled = false;
+      }
+    }
+
+    function downloadCode() {
+      const blob = new Blob([editor.getValue()], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = activeFile;
+      a.click();
+    }
+
+    function loadCodeFromFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        files[file.name] = evt.target.result;
+        switchTab(file.name);
+      };
+      reader.readAsText(file);
+    }
+
+    initPyodide();
+  </script>
+</body>
+</html>
